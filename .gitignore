@@ -1,0 +1,22 @@
+# Archivos y directorios compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Directorios de distribución y empaquetado
+build/
+dist/
+*.egg-info/
+
+# Entornos virtuales
+.env
+.venv
+env/
+venv/
+
+# Archivos de logs y bases de datos locales
+*.log
+
+# Configuraciones de editores y entornos de desarrollo
+.idea/
+.vscode/

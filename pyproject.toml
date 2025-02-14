@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "hitsbe"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [
+    { include = "hitsbe" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+numpy = "^1.21.0"
+transformers = "^4.48.3"
+matplotlib = "^3.10.0"
+torch = "^2.6.0"
+aeon = "^1.0.0"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
