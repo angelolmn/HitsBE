@@ -20,3 +20,4 @@ venv/
 # Configuraciones de editores y entornos de desarrollo
 .idea/
 .vscode/
+.pytest_cache
