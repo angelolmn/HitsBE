@@ -1,7 +1,17 @@
+import numpy as np
+
 class Vocabulary:
-    def __init__(self):
+    def __init__(self, primal = True):
         # Initialize a list to store the words.
         self.words = []
+        if primal:
+            self.primal_vocab()
+
+    def __iter__(self):
+        return iter(self.words)
+
+    def __len__(self):
+        return len(self.words)
 
     def _validate_word(self, word):
         """
@@ -50,4 +60,49 @@ class Vocabulary:
         else:
             raise ValueError("You must provide either an index or a word to delete.")
 
+    def primal_vocab(self):
+        # x, x^2, x^3
+        # 3x/2, 3x^2/2, 3x^3/2
+        # x/2, x^2/2, x^3/2
+        # x/4, x^2/4, x^3/4 
+        domain_len = 8
+        domain = np.linspace(0,1,domain_len)
+        div = np.linspace(1/4,1,4)
 
+        for i in range(1,4):
+            for j in div:
+                self.words.append((domain**i)*j)
+
+        # x^(1/2), x^(1/3), x^(1/8)
+        # x^(1/2)/2, x^(1/3)/2, x^(1/8)/2
+        
+        for i in [1,3,8]:
+            self.words.append(domain**(1/i))
+            self.words.append(self.words[-1]/2)
+        
+        # y = 1/2
+        self.words.append(np.full(domain_len, 1/2))
+        
+        # -4*(x-1)x
+        self.words.append(-4*domain*(domain-1))
+
+        #15x(x-3/4)^2
+
+        # (sen({2,4}*PI*x)+1)/2
+        # (cos({2,4}*PI*x)+1)/2
+
+        for i in [2,4]:
+            self.words.append(
+                (np.sin(i*np.pi*domain) + 1)/2
+                )
+            self.words.append(
+                (np.cos(i*np.pi*domain) + 1)/2
+                )
+
+        # Añadir ruido N(0; 0,1)
+        noise_words = []
+        for w in self.words: 
+            noise_words.append(np.clip(w + np.random.normal(0, 0.05, size=domain_len),0,1))  
+
+        for w in noise_words:
+            self.words.append(w)

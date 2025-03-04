@@ -105,7 +105,7 @@ class Hitsbe:
         for i, w in enumerate(self.vocabulary):
             corr = self.get_word(X, w)  # Get segment and correlation for word w 
             for c in corr:
-                # Purge: in a segment (i) only the word with the highest correlation should remain.
+                # In a segment (i) only the word with the highest correlation should remain.
                 if seq[i][1] < c[1]:
                     seq[i] = c
 

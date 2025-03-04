@@ -1,9 +1,10 @@
 import pytest
+import numpy as np
 from hitsbe import Vocabulary
 
 @pytest.fixture
 def vocab():
-    return Vocabulary()
+    return Vocabulary(primal = False)
 
 @pytest.fixture
 def valid_word():
@@ -91,3 +92,9 @@ def test_delete_no_parameter(vocab, valid_word):
     vocab.add(valid_word)
     with pytest.raises(ValueError):
         vocab.delete()
+
+def test_primal_vocabulary(vocab):
+    vocab.primal_vocab()
+    for word in vocab.words:
+        assert word.size == 8, f"Expected a vector of 8 elements, but got {word.size}."
+        assert np.all(word >= 0) and np.all(word <= 1), "All elements must be in the range [0,1]."
