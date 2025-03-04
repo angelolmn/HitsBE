@@ -8,10 +8,10 @@ import math
 from hitsbe import Vocabulary
 
 
-class Hitsbe:
+class Hitsbe():
     def __init__(self, primal = True):
         self.vocabulary = Vocabulary(primal)
-        self.threshold = 0.9
+        self.threshold = 0.95
         self.size = 1024
         self.cell_size = 8
         self.dim_seq = self.size // self.cell_size
@@ -59,7 +59,7 @@ class Hitsbe:
         return X_adj
         
     @staticmethod
-    def crossCorr(serie, word):
+    def cross_corr(serie, word):
         """
         Computes the correlation of the word with each segment of the time series of the same size.
         Returns a list of floating-point correlations.
@@ -83,34 +83,22 @@ class Hitsbe:
         return correlations
 
 
-    def get_word(self, serie, word):
-        """
-        Returns the segment where the word is found and its correlation.
-        First, it computes the correlation of the word in each segment,
-        then returns those segments whose absolute correlation exceeds a threshold.
-        """
-        corr = self.crossCorr(serie, word)
-        # i is the segment of the series where the word is found
-        # c is the correlation of the word in such segment
-        return [(i, c) for i, c in enumerate(corr) if abs(c) > self.threshold]  
-
-
     def get_sequence(self, X):
         """
         Returns the sequence with the corresponding words and their correlations.
         """
-        seq = [(0, 0.0) for _ in range(self.dim_seq)]
+        seq = [(-np.inf, -np.inf) for _ in range(self.dim_seq)]
 
         if len(X) != self.size:
             X = self._adjust(X)
         
         # Fill the sequence with the corresponding words
         for i, w in enumerate(self.vocabulary):
-            corr = self.get_word(X, w)  # Get segment and correlation for word w 
-            for c in corr:
-                # In a segment (i) only the word with the highest correlation should remain.
-                if seq[i][1] < c[1]:
-                    seq[i] = c
+            corr = self.cross_corr(X, w)
+            for j, c in enumerate(corr):
+                if seq[j][1] < abs(c) and abs(c) > abs(self.threshold):
+                    seq[j] = (i, c)
+
 
         return seq
 
@@ -185,23 +173,31 @@ class Hitsbe:
 
 
     def get_embedding(self, X):
-        # Get the sequence (segments and correlations)
-        seq = self.get_sequence(X)
-        seq_mask = np.array([1 if w != (0, 0.0) else 0 for w in seq])
+        
+        final_embeddings = []
 
-        word_embed = self.compute_word_embedding(seq_mask, seq)
-        pos_embed = self.compute_positional_embedding(seq_mask)
+        for x in X:
+            if len(x) != self.size:
+                x = self._adjust(x)
 
-        # Compute the Haar wavelet decomposition of X and select levels 1 to nhaar_level
-        haar_coeffs = pywt.wavedec(X, 'haar')[1:int(self.nhaar_level)+1]
+            # Get the sequence (segments and correlations)
+            seq = self.get_sequence(x)
+            seq_mask = np.array([1 if w != (0, 0.0) else 0 for w in seq])
 
-        # compute_haar_embedding returns a numpy array of shape (n_valid, dim_model)
-        haar_embed_np = self.compute_haar_embedding(seq_mask, haar_coeffs)
-        # Convert each row of the numpy array into a tensor (to be compatible with word and positional embeddings)
-        haar_embed = [torch.tensor(row, dtype=word_embed[0].dtype) for row in haar_embed_np]
+            word_embed = self.compute_word_embedding(seq_mask, seq)
+            pos_embed = self.compute_positional_embedding(seq_mask)
 
-        # For each segment, we add the word, positional and Haar embeddings.
-        final_embedding = [w + p + h for w, p, h in zip(word_embed, pos_embed, haar_embed)]
 
-        return final_embedding
+            # Compute the Haar wavelet decomposition of x and select levels 1 to nhaar_level
+            haar_coeffs = pywt.wavedec(x, 'haar')[1:int(self.nhaar_level)+1]
+
+            # compute_haar_embedding returns a numpy array of shape (n_valid, dim_model)
+            haar_embed_np = self.compute_haar_embedding(seq_mask, haar_coeffs)
+            # Convert each row of the numpy array into a tensor (to be compatible with word and positional embeddings)
+            haar_embed = [torch.tensor(row, dtype=word_embed[0].dtype) for row in haar_embed_np]
+
+            # For each segment, we add the word, positional and Haar embeddings.
+            final_embeddings.append([w + p + h for w, p, h in zip(word_embed, pos_embed, haar_embed)])
+
+        return final_embeddings
 
