@@ -99,7 +99,7 @@ class Vocabulary:
                 (np.cos(i*np.pi*domain) + 1)/2
                 )
 
-        # Añadir ruido N(0; 0,1)
+        # Add noise N(0; 0,05^2)
         noise_words = []
         for w in self.words: 
             noise_words.append(np.clip(w + np.random.normal(0, 0.05, size=domain_len),0,1))  
