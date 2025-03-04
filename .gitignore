@@ -8,6 +8,9 @@ build/
 dist/
 *.egg-info/
 
+# Carpeta de pruebas
+experiments/
+
 # Entornos virtuales
 .env
 .venv

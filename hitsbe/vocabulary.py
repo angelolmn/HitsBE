@@ -76,7 +76,7 @@ class Vocabulary:
         # x^(1/2), x^(1/3), x^(1/8)
         # x^(1/2)/2, x^(1/3)/2, x^(1/8)/2
         
-        for i in [1,3,8]:
+        for i in [2,3,8]:
             self.words.append(domain**(1/i))
             self.words.append(self.words[-1]/2)
         
@@ -87,6 +87,7 @@ class Vocabulary:
         self.words.append(-4*domain*(domain-1))
 
         #15x(x-3/4)^2
+        self.words.append(15*domain*((domain-3/4)**2))
 
         # (sen({2,4}*PI*x)+1)/2
         # (cos({2,4}*PI*x)+1)/2
@@ -98,6 +99,8 @@ class Vocabulary:
             self.words.append(
                 (np.cos(i*np.pi*domain) + 1)/2
                 )
+            
+        np.random.seed(42)
 
         # Add noise N(0; 0,05^2)
         noise_words = []
