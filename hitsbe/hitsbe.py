@@ -26,7 +26,6 @@ class Hitsbe():
         self.nhaar_level = int(np.log2(self.dim_seq)) + 1
 
         self.word_emb_matrix = nn.Embedding(len(self.vocabulary), self.dim_model)
-        #self.word_emb_matrix = nn.Parameter(torch.randn(len(self.vocabulary.words), 768))
         self.haar_emb_matrix = nn.Parameter(torch.randn(int(self.nhaar_level), self.dim_model))
 
         # Positional encoding.
@@ -42,19 +41,18 @@ class Hitsbe():
         self.pos_emb_matrix[:, 0::2] = torch.sin(position * div_term)
         self.pos_emb_matrix[:, 1::2] = torch.cos(position * div_term)
 
-        # self.size mod self.cell_size == 0
-        # log_2(self.size) = int
-
     def _adjust(self, X):
         "Centers the array X"
-        X_adj = np.zeros(self.size)
+        if not torch.is_tensor(X):
+            X = torch.tensor(X, dtype=torch.float)
+
         n = len(X)
         
         # Calculate the starting index so that X is centered
         start = (self.size - n) // 2
 
         # Create a zero array with the same data type as X
-        X_adj = np.zeros(self.size, dtype=X.dtype)
+        X_adj = torch.zeros(self.size, dtype=X.dtype, device=X.device)
         
         # Place X into the center of X_adj
         X_adj[start:start + n] = X
@@ -74,24 +72,32 @@ class Hitsbe():
         Computes the correlation of the word with each segment of the time series of the same size.
         Returns a list of floating-point correlations.
         """
-        serie = np.array(serie, dtype=np.float32)
-        word = np.array(word, dtype=np.float32)
+        serie = torch.tensor(serie, dtype=torch.float) if not torch.is_tensor(serie) else serie.float()
+        word = torch.tensor(word, dtype=torch.float) if not torch.is_tensor(word) else word.float()
 
         N = len(serie)  # Series length (ideally 2^10)
         M = len(word)   # Word length (ideally 2^3)          N / M = 128 = 2^7
-        
+
         correlations = []  # Will store the Pearson coefficients
+
+        # Use population std (unbiased=False) to be consistent with torch.mean() for covariance
+        std_word = torch.std(word, unbiased=False)
+        mean_word = torch.mean(word)
 
         for i in range(0, N - M + 1, M):
             subseq = serie[i:i + M]  # Extract the subsequence of size M
-            if np.std(word) == 0 or np.std(subseq) == 0:
+            std_subseq = torch.std(subseq, unbiased=False)
+
+            if std_word == 0 or std_subseq == 0:
                 r = 0.0 
             else:
-                r, _ = stats.pearsonr(word, subseq) # Calculate the Pearson correlation
-            correlations.append(float(r)) # Store the correlation
-            
-        return correlations
+                mean_subseq = torch.mean(subseq)
+                cov = torch.mean((word - mean_word) * (subseq - mean_subseq))
+                r = (cov / (std_word * std_subseq)).item()
 
+            correlations.append(float(r))  # Store the correlation
+                
+        return correlations
 
     def get_sequence(self, X):
         """
@@ -126,7 +132,7 @@ class Hitsbe():
                 # seq[i][0] is used as an index into the word embedding module
                 idx = seq[i][0]
                 # Call the embedding module with a tensor index and remove the extra batch dimension
-                emb = self.word_emb_matrix(torch.tensor([idx])).squeeze(0)
+                emb = self.word_emb_matrix(torch.tensor([idx], device=self.word_emb_matrix.weight.device)).squeeze(0)
                 word_emb.append(emb)
 
             else:
@@ -164,45 +170,48 @@ class Hitsbe():
                     hc.append(haar_coeffs[hlevel][index])
 
                 # Append the list of coefficients for this valid segment
-                haar_coeff_to_embed.append(hc)
-            
-            else:
-                haar_coeff_to_embed.append(np.zeros(self.nhaar_level, dtype=np.float32))   
+                haar_coeff_to_embed.append(torch.tensor(hc, dtype=torch.float, device=self.haar_emb_matrix.device))
         
-        # Convert the list of embeddings to a numpy array
-        haar_coeff_to_embed = np.stack(haar_coeff_to_embed, axis=0)
-        haar_emb_matrix_np = self.haar_emb_matrix.detach().cpu().numpy()
+            else:
+                haar_coeff_to_embed.append(torch.zeros(self.nhaar_level, dtype=torch.float, device=self.haar_emb_matrix.device))
+
+        # Convert the list of embeddings to a tensor
+        haar_coeff_to_embed_tensor = torch.stack(haar_coeff_to_embed, dim=0)
         # Compute the dot product between the matrix of Haar coefficients and the Haar embedding matrix
-        haar_embed = np.dot(haar_coeff_to_embed, haar_emb_matrix_np)
+        haar_embed = torch.matmul(haar_coeff_to_embed_tensor, self.haar_emb_matrix)        
         
         return haar_embed
 
 
     def get_embedding(self, X):
-        
+    
         final_embeddings = []
 
         for x in X:
+            # Ensure x is a torch tensor so that we can use .device
+            if not torch.is_tensor(x):
+                x = torch.tensor(x, dtype=torch.float)
+                
             if len(x) != self.size:
                 x = self._adjust(x)
 
             # Get the sequence (segments and correlations)
             seq = self.get_sequence(x)
-            seq_mask = np.array([1 if w != (0, 0.0) else 0 for w in seq])
-
+            seq_mask = torch.tensor([1 if np.isfinite(w[0]) else 0 for w in seq], dtype=torch.long, device=x.device)
+    
             word_embed = self.compute_word_embedding(seq_mask, seq)
             
-
             # Compute the Haar wavelet decomposition of x and select levels 1 to nhaar_level
-            haar_coeffs = pywt.wavedec(x, 'haar')[1:int(self.nhaar_level)+1]
-
-            # compute_haar_embedding returns a numpy array of shape (n_valid, dim_model)
-            haar_embed_np = self.compute_haar_embedding(seq_mask, haar_coeffs)
-            # Convert each row of the numpy array into a tensor (to be compatible with word and positional embeddings)
-            haar_embed = [torch.tensor(row, dtype=word_embed[0].dtype) for row in haar_embed_np]
+            haar_coeffs_tuple = pywt.wavedec(x.cpu().numpy(), 'haar')[1:int(self.nhaar_level)+1]
+            haar_coeffs = [torch.tensor(arr, dtype=torch.float, device=self.haar_emb_matrix.device) for arr in haar_coeffs_tuple]
+            # compute_haar_embedding returns a tensor of shape (dim_seq, dim_model)
+            haar_embed_tensor = self.compute_haar_embedding(seq_mask, haar_coeffs)
+            # Convert each row of the tensor into a tensor (to be compatible with word and positional embeddings)
+            haar_embed = [row.clone().detach().to(x.device).type(word_embed[0].dtype) for row in haar_embed_tensor]
 
             # For each segment, we add the word, positional and Haar embeddings.
             final_embeddings.append([w + p + h for w, p, h in zip(word_embed, self.pos_emb_matrix, haar_embed)])
 
         return final_embeddings
+
 
