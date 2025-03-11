@@ -72,15 +72,22 @@ class Hitsbe():
         Computes the correlation of the word with each segment of the time series of the same size.
         Returns a list of floating-point correlations.
         """
-        serie = torch.tensor(serie, dtype=torch.float) if not torch.is_tensor(serie) else serie.float()
-        word = torch.tensor(word, dtype=torch.float) if not torch.is_tensor(word) else word.float()
+        if not torch.is_tensor(serie):
+            serie = torch.tensor(serie, dtype=torch.float)
+        else:
+            serie = serie.float()
+            
+        if not torch.is_tensor(word):
+            # Move the word tensor to the same device as the serie
+            word = torch.tensor(word, dtype=torch.float, device=serie.device)
+        else:
+            word = word.float().to(serie.device)
 
         N = len(serie)  # Series length (ideally 2^10)
         M = len(word)   # Word length (ideally 2^3)          N / M = 128 = 2^7
 
         correlations = []  # Will store the Pearson coefficients
 
-        # Use population std (unbiased=False) to be consistent with torch.mean() for covariance
         std_word = torch.std(word, unbiased=False)
         mean_word = torch.mean(word)
 
@@ -95,9 +102,10 @@ class Hitsbe():
                 cov = torch.mean((word - mean_word) * (subseq - mean_subseq))
                 r = (cov / (std_word * std_subseq)).item()
 
-            correlations.append(float(r))  # Store the correlation
-                
+            correlations.append(float(r))
+            
         return correlations
+
 
     def get_sequence(self, X):
         """
@@ -131,8 +139,11 @@ class Hitsbe():
                 # Retrieve the word embedding for the segment:
                 # seq[i][0] is used as an index into the word embedding module
                 idx = seq[i][0]
+                # Create the index tensor on the same device as seq_mask
+                idx_tensor = torch.tensor([idx], device=seq_mask.device)
                 # Call the embedding module with a tensor index and remove the extra batch dimension
-                emb = self.word_emb_matrix(torch.tensor([idx], device=self.word_emb_matrix.weight.device)).squeeze(0)
+                emb = self.word_emb_matrix(idx_tensor).squeeze(0)
+
                 word_emb.append(emb)
 
             else:
@@ -191,6 +202,10 @@ class Hitsbe():
             # Ensure x is a torch tensor so that we can use .device
             if not torch.is_tensor(x):
                 x = torch.tensor(x, dtype=torch.float)
+
+            # Move x to the same device as the model parameters (e.g., GPU)
+            x = x.to(self.word_emb_matrix.weight.device)
+
                 
             if len(x) != self.size:
                 x = self._adjust(x)
@@ -209,9 +224,16 @@ class Hitsbe():
             # Convert each row of the tensor into a tensor (to be compatible with word and positional embeddings)
             haar_embed = [row.clone().detach().to(x.device).type(word_embed[0].dtype) for row in haar_embed_tensor]
 
-            # For each segment, we add the word, positional and Haar embeddings.
-            final_embeddings.append([w + p + h for w, p, h in zip(word_embed, self.pos_emb_matrix, haar_embed)])
+            # Move pos_emb_matrix to the same device as x
+            pos_emb = self.pos_emb_matrix.to(x.device)
 
-        return final_embeddings
+            # For each segment, sum the word, positional and Haar embeddings.
+            instance_embeddings = [w + p + h for w, p, h in zip(word_embed, pos_emb, haar_embed)]
+            # Stack embeddings for the current instance: shape (dim_seq, dim_model)
+            final_embeddings.append(torch.stack(instance_embeddings, dim=0))
+    
+        # Stack all instance embeddings: shape (batch_size, dim_seq, dim_model)
+        return torch.stack(final_embeddings, dim=0)
+
 
 
