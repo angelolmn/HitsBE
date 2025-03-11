@@ -118,6 +118,12 @@ class Hitsbe():
                 # Call the embedding module with a tensor index and remove the extra batch dimension
                 emb = self.word_emb_matrix(torch.tensor([idx])).squeeze(0)
                 word_emb.append(emb)
+
+            else:
+                word_emb.append(torch.zeros(self.dim_model,
+                                            device=self.word_emb_matrix.weight.device, 
+                                            dtype=self.word_emb_matrix.weight.dtype)
+                                )   
         
         # Return the list of computed word embeddings
         return word_emb 
@@ -149,27 +155,17 @@ class Hitsbe():
 
                 # Append the list of coefficients for this valid segment
                 haar_coeff_to_embed.append(hc)
+            
+            else:
+                haar_coeff_to_embed.append(np.zeros(self.nhaar_level, dtype=np.float32))   
         
+        # Convert the list of embeddings to a numpy array
+        haar_coeff_to_embed = np.stack(haar_coeff_to_embed, axis=0)
+        haar_emb_matrix_np = self.haar_emb_matrix.detach().cpu().numpy()
         # Compute the dot product between the matrix of Haar coefficients and the Haar embedding matrix
-        haar_embed = np.dot(haar_coeff_to_embed, self.haar_emb_matrix.detach().cpu().numpy())
+        haar_embed = np.dot(haar_coeff_to_embed, haar_emb_matrix_np)
         
         return haar_embed
-
-
-
-    def compute_positional_embedding(self, seq_mask):
-        """
-        Computes the positional embeddings for each segment indicated as valid by the sequence mask
-        """
-        pos_embed = []  # Initialize an empty list to store positional embeddings.
-
-        # Iterate over each index and corresponding mask value in the sequence mask.
-        for i, m in enumerate(seq_mask):
-            if m:  # If the mask value is True (or non-zero), the position is valid.
-                # Append the embedding at index i from the word embedding matrix.
-                pos_embed.append(self.pos_emb_matrix[i])
-        
-        return pos_embed
 
 
     def get_embedding(self, X):
@@ -185,8 +181,7 @@ class Hitsbe():
             seq_mask = np.array([1 if w != (0, 0.0) else 0 for w in seq])
 
             word_embed = self.compute_word_embedding(seq_mask, seq)
-            pos_embed = self.compute_positional_embedding(seq_mask)
-
+            
 
             # Compute the Haar wavelet decomposition of x and select levels 1 to nhaar_level
             haar_coeffs = pywt.wavedec(x, 'haar')[1:int(self.nhaar_level)+1]
@@ -197,7 +192,7 @@ class Hitsbe():
             haar_embed = [torch.tensor(row, dtype=word_embed[0].dtype) for row in haar_embed_np]
 
             # For each segment, we add the word, positional and Haar embeddings.
-            final_embeddings.append([w + p + h for w, p, h in zip(word_embed, pos_embed, haar_embed)])
+            final_embeddings.append([w + p + h for w, p, h in zip(word_embed, self.pos_emb_matrix, haar_embed)])
 
         return final_embeddings
 
