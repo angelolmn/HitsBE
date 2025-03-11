@@ -16,6 +16,8 @@ class Hitsbe():
         self.cell_size = 8
         self.dim_seq = self.size // self.cell_size
 
+        self.att_mask = torch.ones(self.dim_seq, dtype=torch.int32)
+
         # 768 for BERT
         self.dim_model = 768
 
@@ -56,6 +58,14 @@ class Hitsbe():
         
         # Place X into the center of X_adj
         X_adj[start:start + n] = X
+
+        # Config att_mask
+        start_att_mask = start//self.cell_size
+        end_att_mask = (start + n)//self.cell_size
+
+        self.att_mask[:start_att_mask] = 0
+        self.att_mask[end_att_mask + 1:] = 0 
+
         return X_adj
         
     @staticmethod
