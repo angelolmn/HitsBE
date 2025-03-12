@@ -8,21 +8,21 @@ import math
 from hitsbe import Vocabulary
 
 
-class Hitsbe():
-    def __init__(self, primal = True):
+class Hitsbe(nn.Module):
+    def __init__(self, primal=True):
+        super(Hitsbe, self).__init__()
         self.vocabulary = Vocabulary(primal)
         self.threshold = 0.95
         self.size = 1024
         self.cell_size = 8
         self.dim_seq = self.size // self.cell_size
 
-        self.att_mask = torch.ones(self.dim_seq, dtype=torch.int32)
+        self.register_buffer("att_mask", torch.ones(self.dim_seq, dtype=torch.int32))
 
         # 768 for BERT
         self.dim_model = 768
 
-        # Number of levels we will have in the Haar transform
-        # associated with the sequence 
+        # Number of levels for the Haar transform
         self.nhaar_level = int(np.log2(self.dim_seq)) + 1
 
         self.word_emb_matrix = nn.Embedding(len(self.vocabulary), self.dim_model)
@@ -34,12 +34,14 @@ class Hitsbe():
         # are reserved for future work.
 
         # https://discuss.pytorch.org/t/positional-encoding/175953
-        self.pos_emb_matrix = torch.zeros(self.dim_seq, self.dim_model)
         position = torch.arange(0, self.dim_seq, dtype=torch.float).unsqueeze(1)
         # exp(a*ln(b)) = b^a 
         div_term = torch.exp(torch.arange(0, self.dim_model, 2).float() * (-math.log(10000.0) / self.dim_model))
-        self.pos_emb_matrix[:, 0::2] = torch.sin(position * div_term)
-        self.pos_emb_matrix[:, 1::2] = torch.cos(position * div_term)
+        pos_emb = torch.zeros(self.dim_seq, self.dim_model)
+        pos_emb[:, 0::2] = torch.sin(position * div_term)
+        pos_emb[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer("pos_emb_matrix", pos_emb)
+
 
     def _adjust(self, X):
         "Centers the array X"
