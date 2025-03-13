@@ -224,7 +224,7 @@ class Hitsbe(nn.Module):
             # compute_haar_embedding returns a tensor of shape (dim_seq, dim_model)
             haar_embed_tensor = self.compute_haar_embedding(seq_mask, haar_coeffs)
             # Convert each row of the tensor into a tensor (to be compatible with word and positional embeddings)
-            haar_embed = [row.clone().detach().to(x.device).type(word_embed[0].dtype) for row in haar_embed_tensor]
+            haar_embed = [row.to(x.device).type(word_embed[0].dtype) for row in haar_embed_tensor]
 
             # Move pos_emb_matrix to the same device as x
             pos_emb = self.pos_emb_matrix.to(x.device)
