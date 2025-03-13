@@ -5,7 +5,7 @@ import scipy.stats as stats
 import pywt 
 import math
 
-from hitsbe import Vocabulary
+from .vocabulary import Vocabulary
 
 
 class Hitsbe(nn.Module):
