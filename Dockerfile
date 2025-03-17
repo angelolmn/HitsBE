@@ -1,16 +1,25 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock* README.md /app/
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-venv python3.11-dev python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY hitsbe/ /app/hitsbe/
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 
-RUN pip install poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --only main --no-root
+RUN python --version
 
-# No se si es necesario
+RUN pip install --no-cache-dir poetry
+
+ENV PYTHONPATH="/app"
+
+COPY README.md pyproject.toml poetry.lock /app/
+
 COPY . /app
 
-CMD ["python", "hitsbe/main.py"]
+RUN poetry install --with dev
+
+RUN poetry run pip install -e .
+
+CMD ["poetry", "run", "python", "experiments/hitsbert_example.py"]

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from transformers import BertForSequenceClassification, BertTokenizer
 
-from ..hitsbe import Hitsbe
+from hitsbe.hitsbe import Hitsbe
 
 class HitsBERTClassifier(nn.Module):
     def __init__(self, batch_size, sequence_length=128, num_classes=3, bert_model_name='bert-base-uncased'):

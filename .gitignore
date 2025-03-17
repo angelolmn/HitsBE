@@ -9,7 +9,7 @@ dist/
 *.egg-info/
 
 # Carpeta de pruebas
-experiments/
+tools/
 
 # Entornos virtuales
 .env
