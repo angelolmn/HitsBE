@@ -2,7 +2,7 @@
 name = "hitsbe"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Angel <e.angelolm@go.ugr.es>"]
 readme = "README.md"
 packages = [
     { include = "hitsbe" }

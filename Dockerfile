@@ -1,23 +1,13 @@
-FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.0.1-base-ubuntu22.04 
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    python3.11 python3.11-venv python3.11-dev python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3.11 python3-pip 
 
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-
-RUN pip install --no-cache-dir poetry
-
-ENV PYTHONPATH="/app"
-
-COPY README.md pyproject.toml poetry.lock /app/
+RUN pip install poetry
 
 COPY . /app
 
-RUN poetry install --with dev
-
-RUN poetry run pip install -e .
+RUN poetry install
 
 CMD ["poetry", "run", "python", "experiments/hitsbert_example.py"]
