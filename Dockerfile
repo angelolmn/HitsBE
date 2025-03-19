@@ -1,13 +1,7 @@
-FROM nvidia/cuda:12.0.1-base-ubuntu22.04 
+FROM nvidia/cuda:12.8
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y python3.11 python3-pip 
+RUN apt update && apt install -y python3 python3-pip 
 
 RUN pip install poetry
 
-COPY . /app
-
-RUN poetry install
-
-CMD ["poetry", "run", "python", "experiments/hitsbert_example.py"]
+# docker run -v /home/aolmedo/HitsBE:/hitsbe --gpus device=0 -ti hitsbe:latest

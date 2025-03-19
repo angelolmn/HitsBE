@@ -51,9 +51,9 @@ for param in model.bert.bert.parameters():
     param.requires_grad = False
 
 # Unfreeze the first four layers of the BERT encoder for partial training
-for layer in model.bert.bert.encoder.layer[:4]:
-    for param in layer.parameters():
-        param.requires_grad = True
+#for layer in model.bert.bert.encoder.layer[:4]:
+#    for param in layer.parameters():
+#        param.requires_grad = True
 
 # Create DataLoader objects for training and testing
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -82,6 +82,8 @@ for epoch in range(num_epochs):
         loss = criterion(logits, batch_y)  # Compute loss
         loss.backward()  # Backpropagation. Loss is connected with the model through the computational graph
         optimizer.step()  # Update model parameters. The optimizer knows the parameters by its definition
+
+        
 
         total_loss += loss.item() * batch_X.size(0)  # Accumulate batch loss
     
