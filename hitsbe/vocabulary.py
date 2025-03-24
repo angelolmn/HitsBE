@@ -1,11 +1,14 @@
 import numpy as np
+from scipy.interpolate import make_interp_spline
 
 class Vocabulary:
-    def __init__(self, primal = True):
+    def __init__(self, primal = True, spline = True, size = 100):
         # Initialize a list to store the words.
         self.words = []
         if primal:
             self.primal_vocab()
+        elif spline:
+            self.spline_vocab(size)
 
     def __iter__(self):
         return iter(self.words)
@@ -109,3 +112,19 @@ class Vocabulary:
 
         for w in noise_words:
             self.words.append(w)
+
+    def primal_vocab(self, size):
+        domain_len = 8
+
+        np.random.seed(42)
+        xs = np.linspace(0, 1, 5)
+        domain = np.linspace(0,1,domain_len)
+
+        for _ in range(size):
+            ys = np.random.rand(5)*0.6 + 0.2
+            spline = make_interp_spline(xs, ys, k=3)
+
+            word = np.clip(spline(domain), 0.0, 1.0)
+
+            self.words.append()
+
