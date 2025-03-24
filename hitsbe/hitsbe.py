@@ -122,7 +122,7 @@ class Hitsbe(nn.Module):
         for i, w in enumerate(self.vocabulary):
             corr = self.cross_corr(X, w)
             for j, c in enumerate(corr):
-                if seq[j][1] < abs(c) and abs(c) > abs(self.threshold):
+                if seq[j][1] < c and c > self.threshold:
                     seq[j] = (i, c)
 
 

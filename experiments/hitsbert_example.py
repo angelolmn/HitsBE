@@ -51,9 +51,9 @@ for param in model.bert.bert.parameters():
     param.requires_grad = False
 
 # Unfreeze the first four layers of the BERT encoder for partial training
-#for layer in model.bert.bert.encoder.layer[:4]:
-#    for param in layer.parameters():
-#        param.requires_grad = True
+for layer in model.bert.bert.encoder.layer[:4]:
+    for param in layer.parameters():
+        param.requires_grad = True
 
 # Create DataLoader objects for training and testing
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
