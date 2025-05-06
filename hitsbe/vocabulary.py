@@ -1,14 +1,23 @@
 import numpy as np
 from scipy.interpolate import make_interp_spline
 
+import os
+
 class Vocabulary:
-    def __init__(self, primal = True, spline = True, size = 100):
-        # Initialize a list to store the words.
+    def __init__(self, file = "", size = 100):
+        
+        # Initialize a list to store the words
         self.words = []
-        if primal:
+        
+        if file=="":
             self.primal_vocab()
-        elif spline:
             self.spline_vocab(size)
+        else:
+            if os.path.exists(file):
+                self._load_words(file)
+            else:
+                raise FileNotFoundError(f"File '{file}' not found.")
+
 
     def __iter__(self):
         return iter(self.words)
@@ -29,6 +38,23 @@ class Vocabulary:
         if not all(0 <= value <= 1 for value in word):
             raise ValueError("All elements of the word must be in the range [0, 1].")
 
+    def _load_words(self, file):
+        with open(file, "r") as f:
+            vocab_size_line = f.readline()
+            vocab_size = int(vocab_size_line)
+
+            for _ in range(vocab_size):
+                word_line = f.readline()
+                word = list(map(float, word_line.split()))
+                self.add(word)
+
+    def save_words(self,savefile):
+        vocab_size = len(self.words)
+        with open(savefile, "w") as f:
+            f.write(str(vocab_size) + "\n")
+            for word in self.words:
+                new_line = " ".join(map(str, word))
+                f.write(new_line + "\n")
 
     def add(self, word):
         """
@@ -36,6 +62,7 @@ class Vocabulary:
         """
         self._validate_word(word)
         self.words.append(word)
+
 
     def modify(self, index, new_word):
         """
@@ -113,7 +140,7 @@ class Vocabulary:
         for w in noise_words:
             self.words.append(w)
 
-    def primal_vocab(self, size):
+    def spline_vocab(self, size):
         domain_len = 8
 
         np.random.seed(42)
@@ -121,10 +148,15 @@ class Vocabulary:
         domain = np.linspace(0,1,domain_len)
 
         for _ in range(size):
-            ys = np.random.rand(5)*0.6 + 0.2
+            ys = np.random.rand(5)
             spline = make_interp_spline(xs, ys, k=3)
 
-            word = np.clip(spline(domain), 0.0, 1.0)
+            word = spline(domain)
 
-            self.words.append()
+            wmin = np.min(word)
+            wmax = np.max(word)
+
+            norm_word = (word - wmin)/(wmax -wmin)
+
+            self.words.append(norm_word)
 
