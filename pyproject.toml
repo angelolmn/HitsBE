@@ -19,6 +19,7 @@ pywavelets = "^1.8.0"
 scipy = ">=1.9.0,<1.15.0"
 torchviz = "^0.0.3"
 graphviz = "^0.20.3"
+datasetsforecast = "^1.0.0"
 
 
 
