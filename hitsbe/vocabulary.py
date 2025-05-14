@@ -4,17 +4,18 @@ from scipy.interpolate import make_interp_spline
 import os
 
 class Vocabulary:
-    def __init__(self, file = "", size = 100):
+    def __init__(self, file = "", domain_len = 8):
         
-        # Initialize a list to store the words
-        self.words = []
+        # Initialize a list to store the words by monotone indexation
+        self.words = [[] for _ in range(2**(domain_len-1))]
+
+        self.domain_len = domain_len
         
         if file=="":
             self.primal_vocab()
-            self.spline_vocab(size)
         else:
             if os.path.exists(file):
-                self._load_words(file)
+                self.load_words(file)
             else:
                 raise FileNotFoundError(f"File '{file}' not found.")
 
@@ -23,22 +24,40 @@ class Vocabulary:
         return iter(self.words)
 
     def __len__(self):
-        return len(self.words)
+        size = 0
+        for w in self.words:
+            size += len(w)
+
+        return size
+    
+    def __getitem__(self, key):
+        return self.words[key]
 
     def _validate_word(self, word):
         """
-        Validates that the word has exactly 8 elements and that each element is a float in the range [0, 1].
+        Validates that the word has exactly domain_len elements and that each element is a float in the range [0, 1].
         """
         if not isinstance(word, list):
             raise ValueError("The word must be a list of numbers.")
-        if len(word) != 8:
-            raise ValueError("The word must have exactly 8 elements.")
+        if len(word) != self.domain_len:
+            raise ValueError("The word must have exactly {dom} elements.")
         if not all(isinstance(value, float) for value in word):
             raise ValueError("All elements of the word must be floats.")
         if not all(0 <= value <= 1 for value in word):
             raise ValueError("All elements of the word must be in the range [0, 1].")
+        
+    def _compute_index(self, word):
+        index = ""
+        
+        for i in range(len(word) - 1):
+            if word[i] > word[i+1]:
+                index += "0"
+            else:
+                index += "1"
 
-    def _load_words(self, file):
+        return int(index, 2)
+
+    def load_words(self, file):
         with open(file, "r") as f:
             vocab_size_line = f.readline()
             vocab_size = int(vocab_size_line)
@@ -49,114 +68,73 @@ class Vocabulary:
                 self.add(word)
 
     def save_words(self,savefile):
-        vocab_size = len(self.words)
+        vocab_size = 0
+        for w in self.words:
+            vocab_size += len(w)
+
         with open(savefile, "w") as f:
             f.write(str(vocab_size) + "\n")
-            for word in self.words:
-                new_line = " ".join(map(str, word))
-                f.write(new_line + "\n")
+            for word_list in self.words:
+                for word in word_list:
+                    new_line = " ".join(map(str, word))
+                    f.write(new_line + "\n")
 
     def add(self, word):
         """
         Adds a new word to the vocabulary after validating it.
         """
         self._validate_word(word)
-        self.words.append(word)
+        index = self._compute_index(word)
+        self.words[index].append(word)
 
-
-    def modify(self, index, new_word):
+    def delete(self, word):
         """
-        Modifies the word at the specified index with 'new_word' after validating it.
+        Deletes a word from the vocabulary
         """
-        if index < 0 or index >= len(self.words):
-            raise IndexError("The index is out of range.")
-
-        self._validate_word(new_word)
-        self.words[index] = new_word
-
-    def delete(self, index=None, word=None):
-        """
-        Deletes a word from the vocabulary. It can be removed by specifying either the index or the word.
-        """
-        if index is not None:
-            if index < 0 or index >= len(self.words):
-                raise IndexError("The index is out of range.")
-            del self.words[index]
-        elif word is not None:
-            try:
-                self.words.remove(word)
-            except ValueError:
-                raise ValueError("The provided word is not in the vocabulary.")
-        else:
-            raise ValueError("You must provide either an index or a word to delete.")
+        try:
+            index = self._compute_index(word)
+            self.words[index].remove(word)
+        except ValueError:
+            raise ValueError("The provided word is not in the vocabulary.")
 
     def primal_vocab(self):
         # x, x^2, x^3
         # 3x/2, 3x^2/2, 3x^3/2
         # x/2, x^2/2, x^3/2
         # x/4, x^2/4, x^3/4 
-        domain_len = 8
-        domain = np.linspace(0,1,domain_len)
+        domain = np.linspace(0,1,self.domain_len)
         div = np.linspace(1/4,1,4)
 
         for i in range(1,4):
             for j in div:
-                self.words.append((domain**i)*j)
+                self.add(((domain**i)*j).tolist())
 
         # x^(1/2), x^(1/3), x^(1/8)
         # x^(1/2)/2, x^(1/3)/2, x^(1/8)/2
         
         for i in [2,3,8]:
-            self.words.append(domain**(1/i))
-            self.words.append(self.words[-1]/2)
+            self.add((domain**(1/i)).tolist())            
+            self.add((domain**(1/i)/2).tolist())
         
         # y = 1/2
-        self.words.append(np.full(domain_len, 1/2))
-        
+        self.add([1/2 for _ in range(self.domain_len)])        
         # -4*(x-1)x
-        self.words.append(-4*domain*(domain-1))
+        self.add((-4*domain*(domain-1)).tolist())
 
         #15x(x-3/4)^2
-        self.words.append(15*domain*((domain-3/4)**2))
+        self.add((15*domain*((domain-3/4)**2)).tolist())    
 
         # (sen({2,4}*PI*x)+1)/2
         # (cos({2,4}*PI*x)+1)/2
 
         for i in [2,4]:
-            self.words.append(
-                (np.sin(i*np.pi*domain) + 1)/2
-                )
-            self.words.append(
-                (np.cos(i*np.pi*domain) + 1)/2
-                )
+            self.add(((np.sin(i*np.pi*domain) + 1)/2).tolist())    
+            self.add(((np.cos(i*np.pi*domain) + 1)/2).tolist())    
             
+
+    def unif_vocab(self, size):
         np.random.seed(42)
-
-        # Add noise N(0; 0,05^2)
-        noise_words = []
-        for w in self.words: 
-            noise_words.append(np.clip(w + np.random.normal(0, 0.05, size=domain_len),0,1))  
-
-        for w in noise_words:
-            self.words.append(w)
-
-    def spline_vocab(self, size):
-        domain_len = 8
-
-        np.random.seed(42)
-        xs = np.linspace(0, 1, 5)
-        domain = np.linspace(0,1,domain_len)
 
         for _ in range(size):
-            ys = np.random.rand(5)
-            spline = make_interp_spline(xs, ys, k=3)
-
-            word = spline(domain)
-
-            wmin = np.min(word)
-            wmax = np.max(word)
-
-            norm_word = (word - wmin)/(wmax -wmin)
-
-            self.words.append(norm_word)
+            self.add(np.random.rand(self.domain_len).tolist())
 

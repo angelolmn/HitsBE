@@ -3,14 +3,45 @@ import torch.nn as nn
 import pywt 
 import math
 
-from .vocabulary2 import Vocabulary
+import json
+import os
+
+from .vocabulary import Vocabulary
+
+class HitsbeConfig:
+    def __init__(self, vocabulary_path, 
+                 ts_len,
+                 dim_model, 
+                 dim_segment, 
+                 max_haar_depth):
+        
+        self.vocabulary_path = vocabulary_path
+        self.ts_len = ts_len
+        self.dim_model = dim_model
+        self.dim_segment = dim_segment
+        self.max_haar_depth = max_haar_depth
+
+    def to_dict(self):
+        return self.__dict__
+
+    def save_pretrained(self, path):
+        os.makedirs(path, exist_ok=True)
+        with open(f"{path}/config_hitsbe.json", "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def from_pretrained(cls, path):
+        with open(f"{path}/config_hitsbe.json") as f:
+            cfg = json.load(f)
+        return cls(**cfg)
+
 
 
 class Hitsbe(nn.Module):
-    def __init__(self, filename=""):
+    def __init__(self, hitsbe_config: HitsbeConfig):
         super(Hitsbe, self).__init__()
 
-        self.vocabulary = Vocabulary(file=filename)
+        self.vocabulary = Vocabulary(hitsbe_config.vocabulary_path)
         
         vocab_dist = torch.tensor([len(w) for  w in self.vocabulary])
         vocab_dist = torch.cumsum(vocab_dist, dim=0)
@@ -20,16 +51,21 @@ class Hitsbe(nn.Module):
         self.register_buffer("vocabulary_dist", vocab_dist) # No trainable
 
         
-        self.ts_len = 1024
-        self.segment_len = 8
+        self.ts_len = hitsbe_config.ts_len
+        self.dim_segment = hitsbe_config.dim_segment
 
-        self.dim_seq = self.ts_len // self.segment_len
+        self.dim_seq = self.ts_len // self.dim_segment
 
         # 768 for BERT
-        self.dim_model = 768
+        self.dim_model = hitsbe_config.dim_model
         
         # Number of levels for the Haar transform
-        self.nhaar_level = int(torch.log2(torch.tensor(self.dim_seq, dtype=torch.float32)).item())
+        nhaar_level = int(torch.log2(torch.tensor(self.dim_seq, dtype=torch.float32)).item())
+
+        if nhaar_level < hitsbe_config.max_haar_depth:
+            self.nhaar_level = nhaar_level
+        else:
+            self.nhaar_level = hitsbe_config.max_haar_depth
         
         self.word_emb_matrix = nn.Embedding(len(self.vocabulary), self.dim_model)
         self.haar_emb_matrix = nn.Parameter(torch.randn(self.nhaar_level + 1, self.dim_model))
@@ -72,8 +108,8 @@ class Hitsbe(nn.Module):
                 X_adj[i, start:end] = x
 
                 # Config att_mask
-                start_att_mask = start//self.segment_len
-                end_att_mask = (start + N)//self.segment_len # include the last segment
+                start_att_mask = start//self.dim_segment
+                end_att_mask = (start + N)//self.dim_segment # include the last segment
 
                 att_mask[i, start_att_mask:end_att_mask] = 1
             elif N > self.ts_len:
@@ -91,10 +127,10 @@ class Hitsbe(nn.Module):
 
         smin = torch.min(segment)
         smax = torch.max(segment)
-        # (segment_len)
+        # (dim_segment)
         segment_norm = (segment - smin) / (smax - smin + 1e-8)
 
-        # (N_words, segment_len)
+        # (N_words, dim_segment)
         vocab_tensor = torch.tensor(self.vocabulary[segment_bit_index], dtype=segment_norm.dtype, device= device)
 
         distances = torch.abs(vocab_tensor - segment_norm).sum(dim=1)
@@ -125,8 +161,8 @@ class Hitsbe(nn.Module):
             valid_index = torch.nonzero(mask, as_tuple=True)[0]
 
             for k in valid_index:
-                start = k*self.segment_len
-                end = start + self.segment_len
+                start = k*self.dim_segment
+                end = start + self.dim_segment
                 segment = x[start:end]
                 batch_sequence[i, k] = self.get_best_approach(segment, return_index)
     

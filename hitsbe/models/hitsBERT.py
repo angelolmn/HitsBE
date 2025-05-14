@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertConfig, BertModel
 
-from hitsbe import Hitsbe
+from hitsbe import Hitsbe, HitsbeConfig
 
 import os
 
@@ -57,13 +57,21 @@ class HitsBERT(nn.Module):
     
     def save_pretrained(self, path, filename = "hitsbert_model.bin"):
         os.makedirs(path, exist_ok =True)
+        # Save weights
         torch.save(self.state_dict(), os.path.join(path, filename))
-        self.config.to_json_file(os.path.join(path, "config.json"))
+        # Save BERT config
+        self.config.to_json_file(os.path.join(path, "config_BERT.json"))
+        # Save hitsbe 
+        self.hitsbe.config.save_pretrained(path)
 
     @classmethod
-    def from_pretrained(cls, path, filename = "hitsbert_model.bin", hitsbe=None):
-        bert_config = BertConfig.from_json_file(os.path.join(path, "config.json"))
+    def from_pretrained(cls, path, filename = "hitsbert_model.bin"):
+        bert_config = BertConfig.from_json_file(os.path.join(path, "config_BERT.json"))
+        hitsbe_config = HitsbeConfig.from_pretrained(path)
+
+        hitsbe = Hitsbe(hitsbe_config)
         model = cls(bert_config=bert_config, hitsbe=hitsbe)
+
         # map_location load "cpu" if the saved default is not available
         model.load_state_dict(torch.load(os.path.join(path, filename), map_location="cpu"))
         return model
@@ -79,30 +87,23 @@ class HitsBERTPretraining(nn.Module):
         # Weights initialized with 0 mean and initializer_range std
         nn.init.normal_(self.mask_token, mean=0.0, std=self.model.config.initializer_range)
 
-    # Cuidado, X contiene las series sin repetir y MLM contiene num_repeat
-    # mascaras por cada serie. Esto se hace para optimizar hitsbe.
-    # MLM: tensor torch binario con 1 en [MASK] (num_iter, dim_seq, 1)
     # X: time serie (batch_size, ts_len)
-    # options: (num_iter, num_options, seq_length, dim_model)
+    # MLM: tensor torch binario con 1 en [MASK] (num_iter, dim_seq, 1)
+    # options: (num_iter, num_options, ts_len)
     def forward(self, X, MLM, options):
         device = next(self.parameters()).device
-
-        X = X.to(device)
-        MLM = MLM.to(device)
-        options = options.to(device)
         
-        num_iter = MLM.size(0)
-        num_repeat = num_iter//X.size(0)
-        # Revisar dimensiones
+        num_iter = X.size(0)
 
-        # (1, dim_seq, dim_model)
+        # (batch_size, dim_seq, dim_model)
         X_embed, att_mask = self.model.hitsbe.get_embedding(X)
-
-        # (num_iter, dim_seq, dim_model)
-        embeddings_repeated = X_embed.repeat_interleave(num_iter, dim=0)
-        attention_mask = att_mask.repeat_interleave(num_iter, dim=0)
+        
+        # Cuidado aqui con las dimensiones, habria que haceer algun squeeze
+        options_embed, _ = self.model.hitsbe.get_embedding(options)
+        # options_embed hay que cambiarle la dimension con .view
         
         # (num_iter, dim_seq, dim_model)
+        # Matriz con el token [MASK] para facilitar enmascaramiento
         masktoken_matrix = self.mask_token.expand(num_iter, MLM.size(1), -1)
 
         # (num_iter, dim_seq, 1)
@@ -110,10 +111,10 @@ class HitsBERTPretraining(nn.Module):
 
         # Replace the corresponding mask index by [MASK] token
         # (num_iter, dim_seq, dim_model)
-        embeddings_masked = embeddings_repeated*MLM_comp.unsqueeze(2) + masktoken_matrix*MLM.unsqueeze(2)
+        embeddings_masked = X_embed*MLM_comp.unsqueeze(2) + masktoken_matrix*MLM.unsqueeze(2)
         
         # (num_iter, dim_seq + 1(CLS), dim_model)
-        embeddings_cls, attention_mask_cls = self.model.concat_cls(embeddings_masked, attention_mask)
+        embeddings_cls, attention_mask_cls = self.model.concat_cls(embeddings_masked, att_mask)
 
         # (num_iter, dim_seq + 1(CLS), dim_model)                
         output = self.model.bert(inputs_embeds=embeddings_cls, attention_mask=attention_mask_cls)
@@ -127,7 +128,7 @@ class HitsBERTPretraining(nn.Module):
         # scalar product of the words
         # (num_iter, num_options, seq_length) 
         # For each element, we have n options, each one with seq_length scalar product of the words
-        token_scores = torch.einsum('bij,bkij->bki', answers, options)
+        token_scores = torch.einsum('bij,bkij->bki', answers, options_embed)
 
         # (num_iter, num_options)
         # Sum the results of the scalar product in each option
@@ -135,19 +136,27 @@ class HitsBERTPretraining(nn.Module):
 
         return logits # Each row contains the logits for each task
     
-    def save_pretrained(self, path, filename="hitsbert_pretraining.bin"):
-        os.makedirs(path, exist_ok=True)
+    def save_pretrained(self, path, filename = "hitsbertpretrain_model.bin"):
+        os.makedirs(path, exist_ok =True)
+        # Save weights
         torch.save(self.state_dict(), os.path.join(path, filename))
-        self.model.config.to_json_file(os.path.join(path, "config.json"))
+        # Save BERT config
+        self.config.to_json_file(os.path.join(path, "config_BERT.json"))
+        # Save hitsbe 
+        self.hitsbe.config.save_pretrained(path)
 
     @classmethod
-    def from_pretrained(cls, path, filename="hitsbert_pretraining.bin"):
-        config = BertConfig.from_json_file(os.path.join(path, "config.json"))
-        model = HitsBERT(config)
-        pretrain = cls(model)
-        pretrain.load_state_dict(torch.load(os.path.join(path, filename), map_location="cpu"))
-        return pretrain
+    def from_pretrained(cls, path, filename = "hitsbertpretrain_model.bin"):
+        bert_config = BertConfig.from_json_file(os.path.join(path, "config_BERT.json"))
+        hitsbe_config = HitsbeConfig.from_pretrained(path)
 
+        hitsbe = Hitsbe(hitsbe_config)
+        model = cls(bert_config=bert_config, hitsbe=hitsbe)
+
+        # map_location load "cpu" if the saved default is not available
+        model.load_state_dict(torch.load(os.path.join(path, filename), map_location="cpu"))
+        return model
+    
 # REVISAR BIEN
 class HitsBERTClassifier(nn.Module):
     def __init__(self, model: HitsBERT, num_classes: int):
