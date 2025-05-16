@@ -7,7 +7,7 @@ import numpy as np
 from aeon.datasets import load_classification
 from torch.utils.data import DataLoader, TensorDataset
 
-from hitsbe.models.hitsBERT import HitsBERTClassifier
+from hitsbe.models.hitsBERT import HitsBERTPretraining
 
 
 # Hyperparameters

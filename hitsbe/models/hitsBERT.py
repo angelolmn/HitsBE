@@ -87,51 +87,87 @@ class HitsBERTPretraining(nn.Module):
         # Weights initialized with 0 mean and initializer_range std
         nn.init.normal_(self.mask_token, mean=0.0, std=self.model.config.initializer_range)
 
-    # X: time serie (batch_size, ts_len)
-    # MLM: tensor torch binario con 1 en [MASK] (num_iter, dim_seq, 1)
-    # options: (num_iter, num_options, ts_len)
-    def forward(self, X, MLM, options):
+    # With this algorithm we can compute the option embeddings 
+    # and the time series embeddings only once per step.
+    # X: time series, 3 for each test (batch_size, 3, ts_len)
+    # MLM: tensor torch binario con 1 en [MASK] (batch_size, dim_seq)
+    # solutions: (batch_size,)
+    def forward(self, X, MLM, solutions):
         device = next(self.parameters()).device
-        
-        num_iter = X.size(0)
 
-        # (batch_size, dim_seq, dim_model)
-        X_embed, att_mask = self.model.hitsbe.get_embedding(X)
+        bsz, noptions, ts_len = X.shape
+        dim_seq = MLM.size(1)
+        dim_model = self.model.hitsbe.dim_model
+
+        # --------------------------------------
+        # (1) GET EMBEDDINGS 
+        # --------------------------------------
+
+        # X dimension: (batch_size, 3, ts_len) -> (batch_size*3, ts_len)
+        X_reshaped = X.reshape(-1, ts_len)
+
+        # (batch_size*3, dim_seq, dim_model)
+        X_embed, att_mask = self.model.hitsbe.get_embedding(X_reshaped)
+
+        # --------------------------------------
+        # (2) MASK INPUTS 
+        # --------------------------------------
+
+        # embeddings dimension: (batch_size*3, dim_seq, dim_model) -> 
+        # -> (batch_size, 3, dim_seq, dim_model)
+        embed_grouped = X_embed.reshape(bsz, noptions, dim_seq, dim_model)
+
+        batch_index = torch.arange(bsz)
         
-        # Cuidado aqui con las dimensiones, habria que haceer algun squeeze
-        options_embed, _ = self.model.hitsbe.get_embedding(options)
-        # options_embed hay que cambiarle la dimension con .view
-        
-        # (num_iter, dim_seq, dim_model)
+        # Select the ts which will be the solution so must be introduced at BERT
+        # (batch_size, dim_seq, dim_model) 
+        embed_to_BERT = embed_grouped[batch_index, solutions]
+
+        # No hace falta usar solutions pero ya que lo tenemos lo aprovechamos
+        # Es la misma mascara para las n_options opciones
+        att_mask = att_mask[batch_index, solutions]
+
+        # (batch_size, 1, dim_seq, dim_model) -> (batch_size, dim_seq, dim_model) 
+
         # Matriz con el token [MASK] para facilitar enmascaramiento
-        masktoken_matrix = self.mask_token.expand(num_iter, MLM.size(1), -1)
+        # (batch_size, dim_seq, dim_model)
+        masktoken_matrix = self.mask_token.expand(bsz, dim_seq, -1)
 
-        # (num_iter, dim_seq, 1)
+        # (batch_size, dim_seq, 1)
         MLM_comp = 1 - MLM
 
         # Replace the corresponding mask index by [MASK] token
-        # (num_iter, dim_seq, dim_model)
-        embeddings_masked = X_embed*MLM_comp.unsqueeze(2) + masktoken_matrix*MLM.unsqueeze(2)
+        # (batch_size, dim_seq, dim_model)
+        embeddings_masked = embed_to_BERT*MLM_comp.unsqueeze(2) + masktoken_matrix*MLM.unsqueeze(2)
         
-        # (num_iter, dim_seq + 1(CLS), dim_model)
+        # (batch_size, dim_seq + 1(CLS), dim_model)
         embeddings_cls, attention_mask_cls = self.model.concat_cls(embeddings_masked, att_mask)
 
-        # (num_iter, dim_seq + 1(CLS), dim_model)                
+        # --------------------------------------
+        # BERT 
+        # --------------------------------------
+
+        # (batch_size, dim_seq + 1(CLS), dim_model)                
         output = self.model.bert(inputs_embeds=embeddings_cls, attention_mask=attention_mask_cls)
 
+        # --------------------------------------
+        # (3) COMPUTE LOGITS 
+        # --------------------------------------
+
         # Remove [CLS] token 
+        # (batch_size, dim_seq + 1(CLS), dim_model) -> (batch_size, dim_seq, dim_model)
         last_hidden_state = output.last_hidden_state
         answers = last_hidden_state[:, 1:, :]
 
-        # answers dimension: (num_iter, seq_length, dim_model);             
-        # options dimension: (num_iter, num_options, seq_length, dim_model)
-        # scalar product of the words
-        # (num_iter, num_options, seq_length) 
-        # For each element, we have n options, each one with seq_length scalar product of the words
-        token_scores = torch.einsum('bij,bkij->bki', answers, options_embed)
+        # answers dimension: (batch_size, dim_seq, dim_model);             
+        # embed_grouped dimension: (batch_size, num_options, dim_seq, dim_model)
+        # scalar product of the words 
+        # <(batch_size, dim_seq, dim_model),(batch_size, num_options, dim_seq, dim_model)> =
+        # = (batch_size, num_options, dim_seq)
+        token_scores = torch.einsum('bij,bkij->bki', answers, embed_grouped)
 
-        # (num_iter, num_options)
-        # Sum the results of the scalar product in each option
+        # Sum the results of the scalar product in each option to get the logits
+        # (batch_size, num_options, dim_seq) -> (batch_size, num_options, 1)
         logits = token_scores.sum(dim = 2)
 
         return logits # Each row contains the logits for each task
@@ -198,5 +234,3 @@ class HitsBERTClassifier(nn.Module):
         classifier = cls(hitsbert, num_classes=checkpoint["num_classes"])
         classifier.load_state_dict(checkpoint["state_dict"])
         return classifier
-
-
