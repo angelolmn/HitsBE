@@ -68,7 +68,7 @@ class Hitsbe(nn.Module):
             self.nhaar_level = hitsbe_config.max_haar_depth
         
         self.word_emb_matrix = nn.Embedding(len(self.vocabulary), self.dim_model)
-        self.haar_emb_matrix = nn.Parameter(torch.randn(self.nhaar_level + 1, self.dim_model))
+        self.haar_emb_matrix = nn.Parameter(torch.randn(self.nhaar_level + 1, self.dim_model)).to(torch.float32)
 
         # Positional encoding.
         # The sinusoidal version is the simplest to implement initially.
