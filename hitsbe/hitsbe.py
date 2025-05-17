@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pywt 
 import math
 
@@ -68,7 +69,7 @@ class Hitsbe(nn.Module):
             self.nhaar_level = hitsbe_config.max_haar_depth
         
         self.word_emb_matrix = nn.Embedding(len(self.vocabulary), self.dim_model)
-        self.haar_emb_matrix = nn.Parameter(torch.randn(self.nhaar_level + 1, self.dim_model)).to(torch.float32)
+        self.haar_emb_matrix = nn.Parameter(torch.randn(self.nhaar_level + 1, self.dim_model).to(torch.float32))
 
         # Positional encoding.
         # The sinusoidal version is the simplest to implement initially.
@@ -198,7 +199,7 @@ class Hitsbe(nn.Module):
                 
         # coeffs_masked (batch_size, dim_seq, nhaar_level)
         # haar_emb_matrix = (nhaar_level, dim_model)
-        coeffs_embebed = coeffs_masked @ self.haar_emb_matrix
+        coeffs_embebed = coeffs_masked.to(self.haar_emb_matrix.dtype) @ self.haar_emb_matrix
 
         return coeffs_embebed
 
@@ -215,8 +216,16 @@ class Hitsbe(nn.Module):
         sequence_embed = self.compute_word_embedding(X_adj, att_mask)
         
         haar_embed = self.compute_haar_embedding(X_adj, att_mask)
+        haar_embed = F.layer_norm(haar_embed, haar_embed.shape[-1:])
+ 
+        with torch.no_grad():
+            print("sequence_embed: mean =", sequence_embed.mean().item(), "std =", sequence_embed.std().item())
+            print("haar_embed:     mean =", haar_embed.mean().item(),     "std =", haar_embed.std().item())
+            print("pos_emb_matrix: mean =", self.pos_emb_matrix.mean().item(), "std =", self.pos_emb_matrix.std().item())
 
         batchts_embebed = sequence_embed + haar_embed + self.pos_emb_matrix
+        
+        batchts_embebed = F.layer_norm(batchts_embebed, batchts_embebed.shape[-1:])
 
         return batchts_embebed, att_mask
 

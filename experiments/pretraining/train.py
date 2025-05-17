@@ -58,6 +58,7 @@ def main():
     )
 
     base_model = hitsBERT.HitsBERT(bert_config=config, hitsbe=hitsbe)
+    base_model = base_model.half()
     model = hitsBERT.HitsBERTPretraining(model=base_model)
 
     # Prepare optimizer and scheduler
@@ -81,7 +82,7 @@ def main():
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,             
                                                     max_lr=2e-3, 
                                                     epochs=2,
-                                                    steps_per_epoch=1050, # Cambiar
+                                                    steps_per_epoch=1050//50, # Cambiar
                                                     pct_start=0.1, # % steps of total steps for warmup 
                                                     div_factor = 1e3, # initial_lr = max_lr/div_factor
                                                     final_div_factor = 25, # minimum lr initial_lr/final_div_factor

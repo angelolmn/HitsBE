@@ -24,7 +24,12 @@ def train_one_epoch(model_engine, dataloader, epoch):
             model_engine.step()
         """
         # Calculamos la pérdida
-        loss = torch.nn.functional.cross_entropy(logits, solutions)
+        print("logits:", logits[0])
+        print("solutions:", solutions[0])
+        print("logits dtype:", logits.dtype)
+        print("solutions dtype:", solutions.dtype)
+        
+        loss = torch.nn.functional.cross_entropy(logits.float(), solutions.long())
 
         # Reemplaza loss.backward() para usar optimizacion de memoria
         # ZeRO optimization, gradient partitioning, etc.

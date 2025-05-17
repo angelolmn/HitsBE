@@ -42,7 +42,7 @@ class HitsBERT(nn.Module):
         embeddings_with_cls = torch.cat((cls, embeds), dim=1)  # (batch_size, dim_seq + 1, hidden_size)
         
         cls_mask = torch.ones((batch_size, 1), dtype=att_mask.dtype, device=att_mask.device)
-        # (batch_size, dim_seq + 1) 
+        # (batch_size, dim_seq + 1)
         att_mask_cls =  torch.cat((cls_mask, att_mask), dim=1)
         
         return embeddings_with_cls, att_mask_cls
@@ -116,6 +116,7 @@ class HitsBERTPretraining(nn.Module):
         # embeddings dimension: (batch_size*3, dim_seq, dim_model) -> 
         # -> (batch_size, 3, dim_seq, dim_model)
         embed_grouped = X_embed.reshape(bsz, noptions, dim_seq, dim_model)
+        embed_grouped = embed_grouped.to(dtype=self.model.bert.embeddings.word_embeddings.weight.dtype)
 
         batch_index = torch.arange(bsz)
         
@@ -125,7 +126,7 @@ class HitsBERTPretraining(nn.Module):
 
         # No hace falta usar solutions pero ya que lo tenemos lo aprovechamos
         # Es la misma mascara para las n_options opciones
-        att_mask = att_mask[batch_index, solutions]
+        att_mask = att_mask[batch_index*noptions]
 
         # (batch_size, 1, dim_seq, dim_model) -> (batch_size, dim_seq, dim_model) 
 
@@ -146,6 +147,8 @@ class HitsBERTPretraining(nn.Module):
         # --------------------------------------
         # BERT 
         # --------------------------------------
+        
+        embeddings_cls = embeddings_cls.to(dtype=self.model.bert.embeddings.word_embeddings.weight.dtype)
 
         # (batch_size, dim_seq + 1(CLS), dim_model)                
         output = self.model.bert(inputs_embeds=embeddings_cls, attention_mask=attention_mask_cls)
@@ -164,11 +167,21 @@ class HitsBERTPretraining(nn.Module):
         # scalar product of the words 
         # <(batch_size, dim_seq, dim_model),(batch_size, num_options, dim_seq, dim_model)> =
         # = (batch_size, num_options, dim_seq)
+       
+        answers = F.layer_norm(answers, answers.shape[-1:])
+        embed_grouped = F.layer_norm(embed_grouped, embed_grouped.shape[-1:])
+
+        print("BERT output std:", output.last_hidden_state.std().item())
+        print("answers:", answers.mean().item(), answers.std().item())
+        print("embed_grouped:", embed_grouped.mean().item(), embed_grouped.std().item())
+
         token_scores = torch.einsum('bij,bkij->bki', answers, embed_grouped)
 
         # Sum the results of the scalar product in each option to get the logits
         # (batch_size, num_options, dim_seq) -> (batch_size, num_options, 1)
-        logits = token_scores.sum(dim = 2)
+        logits = token_scores.mean(dim = 2)
+        
+        logits = logits / torch.sqrt(torch.tensor(answers.size(1), device=logits.device, dtype=logits.dtype))
 
         return logits # Each row contains the logits for each task
     
