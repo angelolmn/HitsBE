@@ -1,11 +1,15 @@
 {
-  "train_batch_size": 32,
-  "gradient_accumulation_steps": 1,
+  "train_batch_size": 150,
+  "train_micro_batch_size_per_gpu": 10,
+  "gradient_accumulation_steps": 15,
   "fp16": {
     "enabled": true,
     "initial_scale_power": 16
   },
   "zero_optimization": {
-    "stage": 2
+    "stage": 2,
+    "reduce_bucket_size": 50000000,      
+    "allgather_bucket_size": 50000000,
+    "overlap_comm": true
   }
 }

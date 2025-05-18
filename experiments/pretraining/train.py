@@ -31,7 +31,7 @@ def main():
     vocabulary = Vocabulary(filename)
 
     ts_len = 1024
-    dim_model = 1024
+    dim_model = 768
     dim_segment = 8
     max_haar_depth = 8
 
@@ -48,8 +48,8 @@ def main():
     config = BertConfig(
         vocab_size=len(hitsbe.vocabulary),               
         hidden_size=hitsbe.dim_model,              
-        num_hidden_layers=24,
-        num_attention_heads=16,
+        num_hidden_layers=12,
+        num_attention_heads=12,
         intermediate_size=4 * hitsbe.dim_model,
         max_position_embeddings=hitsbe.dim_seq + 1,
         pad_token_id=0,
@@ -62,7 +62,7 @@ def main():
     model = hitsBERT.HitsBERTPretraining(model=base_model)
 
     # Prepare optimizer and scheduler
-    micro_batch_size = 50  # debe coincidir con train_batch_size / num_gpus
+    micro_batch_size = 200  # debe coincidir con train_batch_size / num_gpus
     
     train_loader = get_dataloader(split="ETTh1_",batch_size=micro_batch_size)
     steps_per_epoch = len(train_loader)
@@ -82,7 +82,7 @@ def main():
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,             
                                                     max_lr=2e-3, 
                                                     epochs=2,
-                                                    steps_per_epoch=1050//50, # Cambiar
+                                                    steps_per_epoch=1050//150, # Cambiar
                                                     pct_start=0.1, # % steps of total steps for warmup 
                                                     div_factor = 1e3, # initial_lr = max_lr/div_factor
                                                     final_div_factor = 25, # minimum lr initial_lr/final_div_factor
@@ -93,7 +93,6 @@ def main():
         model=model,
         model_parameters=model.parameters(),
         optimizer=optimizer,
-        lr_scheduler=scheduler,
         config=args.deepspeed,  # <- aquí usas el JSON que tú pasas
         args=args
     )
@@ -102,7 +101,7 @@ def main():
 
     # Training loop
     for epoch in range(args.epochs):
-        train_one_epoch(model_engine, train_loader, epoch)
+        train_one_epoch(model_engine, train_loader, epoch, scheduler)
         model_engine.save_checkpoint("checkpoints/", tag=f"epoch{epoch}")
 
 if __name__ == "__main__":

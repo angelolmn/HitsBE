@@ -218,11 +218,6 @@ class Hitsbe(nn.Module):
         haar_embed = self.compute_haar_embedding(X_adj, att_mask)
         haar_embed = F.layer_norm(haar_embed, haar_embed.shape[-1:])
  
-        with torch.no_grad():
-            print("sequence_embed: mean =", sequence_embed.mean().item(), "std =", sequence_embed.std().item())
-            print("haar_embed:     mean =", haar_embed.mean().item(),     "std =", haar_embed.std().item())
-            print("pos_emb_matrix: mean =", self.pos_emb_matrix.mean().item(), "std =", self.pos_emb_matrix.std().item())
-
         batchts_embebed = sequence_embed + haar_embed + self.pos_emb_matrix
         
         batchts_embebed = F.layer_norm(batchts_embebed, batchts_embebed.shape[-1:])

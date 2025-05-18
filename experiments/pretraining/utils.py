@@ -1,6 +1,6 @@
 import torch
 
-def train_one_epoch(model_engine, dataloader, epoch):
+def train_one_epoch(model_engine, dataloader, epoch, scheduler):
     model_engine.train()
 
     # Step es el numero de lote dentro de la epoca
@@ -23,12 +23,7 @@ def train_one_epoch(model_engine, dataloader, epoch):
         if model_engine.is_gradient_accumulation_boundary():
             model_engine.step()
         """
-        # Calculamos la pérdida
-        print("logits:", logits[0])
-        print("solutions:", solutions[0])
-        print("logits dtype:", logits.dtype)
-        print("solutions dtype:", solutions.dtype)
-        
+        # Calculamos la pérdida 
         loss = torch.nn.functional.cross_entropy(logits.float(), solutions.long())
 
         # Reemplaza loss.backward() para usar optimizacion de memoria
@@ -37,6 +32,8 @@ def train_one_epoch(model_engine, dataloader, epoch):
         # Reemplaza optimizer.step()
         # sincroniza y actualiza parámetros distribuidos
         model_engine.step()
+        if scheduler.last_epoch < scheduler.total_steps:
+            scheduler.step()
 
         # model_engine.local_rank ¿GPU actual, importante para .to()?
         # Mejor usar un log en un fichero creo yo

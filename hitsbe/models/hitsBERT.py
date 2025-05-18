@@ -171,10 +171,6 @@ class HitsBERTPretraining(nn.Module):
         answers = F.layer_norm(answers, answers.shape[-1:])
         embed_grouped = F.layer_norm(embed_grouped, embed_grouped.shape[-1:])
 
-        print("BERT output std:", output.last_hidden_state.std().item())
-        print("answers:", answers.mean().item(), answers.std().item())
-        print("embed_grouped:", embed_grouped.mean().item(), embed_grouped.std().item())
-
         token_scores = torch.einsum('bij,bkij->bki', answers, embed_grouped)
 
         # Sum the results of the scalar product in each option to get the logits
