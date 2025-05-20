@@ -149,7 +149,7 @@ class HitsBERTPretraining(nn.Module):
         # --------------------------------------
         
         embeddings_cls = embeddings_cls.to(dtype=self.model.bert.embeddings.word_embeddings.weight.dtype)
-
+    
         # (batch_size, dim_seq + 1(CLS), dim_model)                
         output = self.model.bert(inputs_embeds=embeddings_cls, attention_mask=attention_mask_cls)
 

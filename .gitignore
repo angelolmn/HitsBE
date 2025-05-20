@@ -11,6 +11,9 @@ dist/
 # Carpeta de pruebas
 tools/
 
+# Checkpoints
+checkpoints
+
 # Entornos virtuales
 .env
 .venv

@@ -11,6 +11,7 @@ from dataset import get_dataloader, MultipleChoiceTimeSeriesDataset
 from utils import train_one_epoch
 from transformers import get_cosine_schedule_with_warmup
 from torch.optim import AdamW
+import time
 
 
 import argparse
@@ -18,7 +19,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", type=int, default=-1)
-    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--deepspeed", type=str, help="Ruta al archivo de configuración DeepSpeed")
     return parser.parse_args()
 
@@ -58,51 +59,42 @@ def main():
     )
 
     base_model = hitsBERT.HitsBERT(bert_config=config, hitsbe=hitsbe)
-    base_model = base_model.half()
     model = hitsBERT.HitsBERTPretraining(model=base_model)
-
-    # Prepare optimizer and scheduler
-    micro_batch_size = 200  # debe coincidir con train_batch_size / num_gpus
+    model.half()
     
-    train_loader = get_dataloader(split="ETTh1_",batch_size=micro_batch_size)
-    steps_per_epoch = len(train_loader)
-    total_training_steps = args.epochs * steps_per_epoch
-    warmup_steps = int(0.06 * total_training_steps)
-
-    # https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html#torch.optim.AdamW
-    optimizer = AdamW(
-        model.parameters(),
-        betas=(0.9, 0.98),
-        eps=1e-6,
-        weight_decay=1e-2
-    )
-
-    # https://www.kaggle.com/code/isbhargav/guide-to-pytorch-learning-rate-scheduling#8.OneCycleLR---linear
-    # https://docs.pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.OneCycleLR.html#torch.optim.lr_scheduler.OneCycleLR
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,             
-                                                    max_lr=2e-3, 
-                                                    epochs=2,
-                                                    steps_per_epoch=1050//150, # Cambiar
-                                                    pct_start=0.1, # % steps of total steps for warmup 
-                                                    div_factor = 1e3, # initial_lr = max_lr/div_factor
-                                                    final_div_factor = 25, # minimum lr initial_lr/final_div_factor
-                                                    anneal_strategy='linear')
-
     # Initialize DeepSpeed
     model_engine, _, _, _ = deepspeed.initialize(
         model=model,
-        model_parameters=model.parameters(),
-        optimizer=optimizer,
-        config=args.deepspeed,  # <- aquí usas el JSON que tú pasas
+        config=args.deepspeed,
         args=args
     )
+    
+    micro_batch_size = 100  # train_batch_size / num_gpus / gradient_accumulate_steps
+    train_loader = get_dataloader(split="ETTh1_",batch_size=micro_batch_size)
 
+    n_batches = len(train_loader)
+    grad_steps = model_engine.gradient_accumulation_steps()
 
+    if n_batches % grad_steps != 0:
+        raise ValueError(
+            f"El número de minibatches ({n_batches}) no es múltiplo de gradient_accumulation_steps ({grad_steps}).\n"
+            f"Esto puede impedir que se ejecute optimizer.step()."
+        )
 
+    print(f"Num batches por época: {len(train_loader)}")
+    print(f"Micro-batch size: {model_engine.train_micro_batch_size_per_gpu()}")
+    print(f"Grad Accumulation Steps: {model_engine.gradient_accumulation_steps()}")
+    print(f"Global batch size: {model_engine.train_batch_size()}")
+    
+    start = time.time()
     # Training loop
     for epoch in range(args.epochs):
-        train_one_epoch(model_engine, train_loader, epoch, scheduler)
+        print("Epoca nueva")
+        train_one_epoch(model_engine, train_loader, epoch)
         model_engine.save_checkpoint("checkpoints/", tag=f"epoch{epoch}")
+    
+    end = time.time()
+    print("Tiempo de ejecucion: " + str(end - start))
 
 if __name__ == "__main__":
     main()
