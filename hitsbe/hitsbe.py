@@ -41,6 +41,7 @@ class HitsbeConfig:
 class Hitsbe(nn.Module):
     def __init__(self, hitsbe_config: HitsbeConfig):
         super(Hitsbe, self).__init__()
+        self.config = hitsbe_config
 
         self.vocabulary = Vocabulary(hitsbe_config.vocabulary_path)
         

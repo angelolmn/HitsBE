@@ -28,7 +28,7 @@ class MultipleChoiceTimeSeriesDataset(Dataset):
 """
 El objetivo es devolver el dataLoader deseado
 """
-def get_dataloader(split="pretrain", batch_size=16, shuffle=True, num_workers=2):
+def get_dataloader(split="", batch_size=16, shuffle=True, num_workers=2):
     base_path = f"experiments/pretraining/data/{split}"
     dataset = MultipleChoiceTimeSeriesDataset(
         f"{base_path}inputs.pt",

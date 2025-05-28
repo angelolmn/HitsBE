@@ -12,9 +12,12 @@ dist/
 tools/
 
 # Checkpoints
-checkpoints
+experiments/pretraining/checkpoints
 
-# Entornos virtuales
+experiments/pretraining/data
+
+experiments/pretraining/savemodel
+#Entornos virtuales
 .env
 .venv
 env/

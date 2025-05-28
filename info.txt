@@ -1,0 +1,20 @@
+[2025-05-25 11:43:44,756] [INFO] [real_accelerator.py:239:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2025-05-25 11:43:58,066] [WARNING] [runner.py:215:fetch_hostfile] Unable to find hostfile, will proceed with training with local resources only.
+[2025-05-25 11:43:58,066] [INFO] [runner.py:605:main] cmd = /root/.cache/pypoetry/virtualenvs/hitsbe-o17z_OcS-py3.12/bin/python -u -m deepspeed.launcher.launch --world_info=eyJsb2NhbGhvc3QiOiBbMF19 --master_addr=127.0.0.1 --master_port=29500 --enable_each_rank_log=None experiments/pretraining/train.py --deepspeed experiments/pretraining/deepspeed_config.json
+[2025-05-25 11:44:00,037] [INFO] [real_accelerator.py:239:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2025-05-25 11:44:04,593] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8
+[2025-05-25 11:44:04,593] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1
+[2025-05-25 11:44:04,593] [INFO] [launch.py:139:main] 0 NCCL_VERSION=2.25.1-1
+[2025-05-25 11:44:04,594] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev
+[2025-05-25 11:44:04,594] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8
+[2025-05-25 11:44:04,594] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_PACKAGE_NAME=libnccl2
+[2025-05-25 11:44:04,594] [INFO] [launch.py:139:main] 0 NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1
+[2025-05-25 11:44:04,594] [INFO] [launch.py:146:main] WORLD INFO DICT: {'localhost': [0]}
+[2025-05-25 11:44:04,594] [INFO] [launch.py:152:main] nnodes=1, num_local_procs=1, node_rank=0
+[2025-05-25 11:44:04,594] [INFO] [launch.py:163:main] global_rank_mapping=defaultdict(<class 'list'>, {'localhost': [0]})
+[2025-05-25 11:44:04,594] [INFO] [launch.py:164:main] dist_world_size=1
+[2025-05-25 11:44:04,594] [INFO] [launch.py:168:main] Setting CUDA_VISIBLE_DEVICES=0
+[2025-05-25 11:44:04,594] [INFO] [launch.py:256:main] process 486 spawned with command: ['/root/.cache/pypoetry/virtualenvs/hitsbe-o17z_OcS-py3.12/bin/python', '-u', 'experiments/pretraining/train.py', '--local_rank=0', '--deepspeed', 'experiments/pretraining/deepspeed_config.json']
+[2025-05-25 11:44:06,689] [INFO] [real_accelerator.py:239:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+[2025-05-25 11:44:09,905] [INFO] [launch.py:319:sigkill_handler] Killing subprocess 486
+[2025-05-25 11:44:10,002] [INFO] [launch.py:328:sigkill_handler] Main process received SIGINT, exiting

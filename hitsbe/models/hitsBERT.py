@@ -8,7 +8,7 @@ from hitsbe import Hitsbe, HitsbeConfig
 import os
 
 class HitsBERT(nn.Module):
-    def __init__(self, bert_config = None, hitsbe= None):
+    def __init__(self, bert_config = None, hitsbe_config= None):
         super().__init__()
         # Load BERT model via BertConfig     
         # El comentario de abajo deberia estar en la memoria o en el README como tutorial de uso
@@ -24,7 +24,7 @@ class HitsBERT(nn.Module):
         self.bert = BertModel(self.config)
         
         # Instantiate the Hitsbe module.
-        self.hitsbe = hitsbe or Hitsbe()
+        self.hitsbe = Hitsbe(hitsbe_config)
         
         # Initialize the classifier token [CLS]. It must be trainable
         self.cls_embedding = nn.Parameter(torch.randn(1, 1, self.config.hidden_size))
@@ -68,9 +68,7 @@ class HitsBERT(nn.Module):
     def from_pretrained(cls, path, filename = "hitsbert_model.bin"):
         bert_config = BertConfig.from_json_file(os.path.join(path, "config_BERT.json"))
         hitsbe_config = HitsbeConfig.from_pretrained(path)
-
-        hitsbe = Hitsbe(hitsbe_config)
-        model = cls(bert_config=bert_config, hitsbe=hitsbe)
+        model = cls(bert_config=bert_config, hitsbe_config=hitsbe_config)
 
         # map_location load "cpu" if the saved default is not available
         model.load_state_dict(torch.load(os.path.join(path, filename), map_location="cpu"))

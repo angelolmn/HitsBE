@@ -2,7 +2,8 @@ import torch
 
 def train_one_epoch(model_engine, dataloader, epoch):
     model_engine.train()
-
+    accuracy = []
+    losses = []
     # Step es el numero de lote dentro de la epoca
     for step, batch in enumerate(dataloader):
         # Se mueven los tensores a la GPU correspondiente (local_rank)
@@ -15,18 +16,9 @@ def train_one_epoch(model_engine, dataloader, epoch):
         # solutions: (batch_size,)
         logits = model_engine(X=input, MLM=mask, solutions=solutions)  # (B, 3)
 
-        """
-        Si voy a usar gradiente acumulado
-        loss = loss / model_engine.gradient_accumulation_steps()
-        model_engine.backward(loss)
-
-        if model_engine.is_gradient_accumulation_boundary():
-            model_engine.step()
-        """
         # Calculamos la pérdida 
         loss = torch.nn.functional.cross_entropy(logits.float(), solutions.long())
-        loss = loss / model_engine.gradient_accumulation_steps()
-        # Reemplaza loss.backward() para usar optimizacion de memoria
+        
         # ZeRO optimization, gradient partitioning, etc.
         model_engine.backward(loss)
         # Reemplaza optimizer.step()
@@ -36,12 +28,28 @@ def train_one_epoch(model_engine, dataloader, epoch):
         predicted_index = torch.argmax(logits, dim=1)
         correct = (predicted_index == solutions).sum().item()
         total = solutions.size(0)
-        accuracy = correct / total
-        print(f"Epoch {epoch} | Step {model_engine.global_steps} | Loss: {loss.item():.4f} | Accuracy: {accuracy:.2%}")
+        accuracy.append(correct / total)
+        
+        losses.append(loss.item())
+
+        #print(logits)
+        #print(loss)
+
+        if (step + 1) % model_engine.gradient_accumulation_steps() == 0:
+            with open("experiments/pretraining/.steps_training_log.txt", "a") as logfile_step:
+            
+                loss_mean = torch.mean(torch.tensor(losses))
+                accuracy_mean = torch.mean(torch.tensor(accuracy))
+
+                line_step = f"Step {model_engine.global_steps} | Loss: {loss_mean:.2f} | Accuracy: {accuracy_mean:.2%}"
+            
+                print(line_step, file=logfile_step)
+            
+                losses = []
+                accuracy = []
 
         # Checkpoints automaticos cada X pasos
-        if step % model_engine.gradient_accumulation_steps() == 0:
-            model_engine.save_checkpoint("checkpoints/", tag=f"epoch{epoch}_step{step}")
+        if (step + 1) % (model_engine.gradient_accumulation_steps() * 130) == 0:
+            model_engine.save_checkpoint("experiments/pretraining/checkpoints/", tag=f"epoch{epoch}_step{step}")
 
-        print(f"Step {step} | Acc Boundary: {model_engine.is_gradient_accumulation_boundary()}")
 
