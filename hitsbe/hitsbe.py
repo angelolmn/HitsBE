@@ -6,6 +6,7 @@ import math
 
 import json
 import os
+import time
 
 from .vocabulary import Vocabulary
 
@@ -207,16 +208,23 @@ class Hitsbe(nn.Module):
 
     def get_embedding(self, X):
         assert isinstance(X, torch.Tensor), "Expected X to be a torch.Tensor"
-
+        
         device = next(self.parameters()).device
         X = X.to(device)
 
         X_adj, att_mask = self._adjust(X)
 
         # Get the sequences (segments and correlations)
+        #t_word_start = time.time()
         sequence_embed = self.compute_word_embedding(X_adj, att_mask)
+        #t_word_end = time.time()
+        #print("Tiempo obteniendo palabras: " + str(t_word_end - t_word_start))
         
+        #t_haar_start = time.time()
         haar_embed = self.compute_haar_embedding(X_adj, att_mask)
+        #t_haar_end = time.time()
+        #print("Tiempo transformada Haar: " + str( t_haar_end - t_haar_start))
+
         haar_embed = F.layer_norm(haar_embed, haar_embed.shape[-1:])
  
         batchts_embebed = sequence_embed + haar_embed + self.pos_emb_matrix

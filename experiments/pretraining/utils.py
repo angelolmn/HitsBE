@@ -1,4 +1,5 @@
 import torch
+import time
 
 def train_one_epoch(model_engine, dataloader, epoch):
     model_engine.train()
@@ -6,6 +7,7 @@ def train_one_epoch(model_engine, dataloader, epoch):
     losses = []
     # Step es el numero de lote dentro de la epoca
     for step, batch in enumerate(dataloader):
+        #t_inicial = time.time()
         # Se mueven los tensores a la GPU correspondiente (local_rank)
         input = batch["input"].to(model_engine.local_rank)     # (B, 3, 1024)
         mask = batch["mask"].to(model_engine.local_rank)       # (B, 128)
@@ -14,6 +16,7 @@ def train_one_epoch(model_engine, dataloader, epoch):
         # X: time series, 3 for each test (batch_size, 3, ts_len)
         # MLM: tensor torch binario con 1 en [MASK] (batch_size, dim_seq)
         # solutions: (batch_size,)
+        #t_forward_start = time.time()
         logits = model_engine(X=input, MLM=mask, solutions=solutions)  # (B, 3)
 
         # Calculamos la pérdida 
@@ -24,6 +27,7 @@ def train_one_epoch(model_engine, dataloader, epoch):
         # Reemplaza optimizer.step()
         # sincroniza y actualiza parámetros distribuidos
         model_engine.step()
+        #t_forward_end = time.time()
 
         predicted_index = torch.argmax(logits, dim=1)
         correct = (predicted_index == solutions).sum().item()
@@ -36,7 +40,7 @@ def train_one_epoch(model_engine, dataloader, epoch):
         #print(loss)
 
         if (step + 1) % model_engine.gradient_accumulation_steps() == 0:
-            with open("experiments/pretraining/.steps_training_log.txt", "a") as logfile_step:
+            with open("experiments/pretraining/.steps_training_log3.txt", "a") as logfile_step:
             
                 loss_mean = torch.mean(torch.tensor(losses))
                 accuracy_mean = torch.mean(torch.tensor(accuracy))
@@ -51,5 +55,9 @@ def train_one_epoch(model_engine, dataloader, epoch):
         # Checkpoints automaticos cada X pasos
         if (step + 1) % (model_engine.gradient_accumulation_steps() * 130) == 0:
             model_engine.save_checkpoint("experiments/pretraining/checkpoints/", tag=f"epoch{epoch}_step{step}")
+        
+        #t_final = time.time()
 
+        #print("Tiempo forward: " + str(t_forward_end - t_forward_start))
+        #print("Tiempo por minibatch: " + str(t_final - t_inicial))
 
