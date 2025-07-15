@@ -2,10 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertConfig, BertModel
-from sklearn.metrics import accuracy_score
-import numpy as np
-from sklearn.model_selection import train_test_split
-
 from hitsbe import Hitsbe, HitsbeConfig
 
 import time
@@ -15,15 +11,6 @@ class HitsBERT(nn.Module):
     def __init__(self, bert_config = None, hitsbe_config= None):
         super().__init__()
         # Load BERT model via BertConfig     
-        # El comentario de abajo deberia estar en la memoria o en el README como tutorial de uso
-        # If we want to use "bert-base-uncased" or "bert-large-uncased"
-        # we must define the BertConfig externally using `BertConfig.from_pretrained(...)`
-        # and load pretrained weights separately using `BertModel.from_pretrained(...).state_dict()`
-        # Example: 
-        # bert = BertModel.from_pretrained("bert-base-uncased")
-        # config = bert.config
-        # model = HitsBERT(bert_config=config)
-        # model.bert.load_state_dict(bert.state_dict())
         self.config = bert_config or BertConfig()
         self.bert = BertModel(self.config)
         
@@ -214,146 +201,3 @@ class HitsBERTPretraining(nn.Module):
         model.load_state_dict(torch.load(os.path.join(path, filename), map_location="cpu"))
         return model
     
-# REVISAR BIEN
-class HitsBERTClassifier(nn.Module):
-    def __init__(self, model: HitsBERT, num_classes: int):
-        super().__init__()
-        self.model = model
-        self.num_classes = num_classes
-
-        self.classifier = nn.Linear(self.model.config.hidden_size, num_classes)
-
-        nn.init.normal_(self.classifier.weight, mean=0.0, std=self.model.config.initializer_range)
-        if self.classifier.bias is not None:
-            nn.init.zeros_(self.classifier.bias)
-
-    def forward(self, X):
-        # X: (batch_size, ts_len)
-        hitsbe_embeddings, att_mask = self.model.hitsbe.get_embedding(X)
-        embeddings_cls, att_mask_cls = self.model.concat_cls(hitsbe_embeddings, att_mask)
-
-        output = self.model.bert(inputs_embeds=embeddings_cls, attention_mask=att_mask_cls)
-        cls_embedding = output.last_hidden_state[:, 0]  # (batch_size, hidden_size)
-
-        logits = self.classifier(cls_embedding)  # (batch_size, num_classes)
-        return logits
-    
-    def fit(self, X_train, y_train, epochs=10, batch_size=32, lr=1e-4, weight_decay=1e-2,device = None):
-        if not device:
-            device="cuda" if torch.cuda.is_available() else "cpu"
-
-        self.to(device)
-        self.train()
-
-        # Freeze all layers of the BERT model
-        for param in self.model.bert.parameters():
-            param.requires_grad = False
-        
-        self.model.hitsbe.haar_emb_matrix.requires_grad = False
-        self.model.hitsbe.word_emb_matrix.weight.requires_grad = False
-
-        for layer in self.model.bert.encoder.layer[-8:]:
-            for param in layer.parameters():
-                param.requires_grad = True
-
-        #for name, param in self.named_parameters():
-        #    print(name, param.requires_grad)
-        
-        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, random_state=42)
-
-        
-        X_train_tensor = [torch.tensor(x, dtype=torch.float32) for x in X_tr]
-        X_val_tensor = [torch.tensor(x, dtype=torch.float32) for x in X_val]
-
-        y_train_tensor = torch.tensor(y_tr, dtype=torch.long)
-        y_val_tensor = torch.tensor(y_val, dtype=torch.long)
-        
-        train_data = list(zip(X_train_tensor, y_train_tensor))
-        valid_data = list(zip(X_val_tensor, y_val_tensor))
-
-        train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-        val_dataloader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size)
-        
-        optimizer = torch.optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay)
-        criterion = nn.CrossEntropyLoss()
-
-        for epoch in range(epochs):
-            epoch_loss = 0
-            all_preds = []
-            all_labels = []
-            nsteps = 0
-            
-            self.train()
-
-            for X_batch, y_batch in train_dataloader:
-                X_batch = X_batch.to(device)
-                y_batch = y_batch.to(device)
-                
-                X_batch = X_batch.squeeze(1)
-                optimizer.zero_grad()
-                logits = self.forward(X_batch)
-
-                loss = criterion(logits, y_batch)
-                loss.backward()
-                optimizer.step()
-
-                epoch_loss += loss.item()
-                nsteps += 1
-                preds = torch.argmax(logits, dim=1)
-                all_preds.extend(preds.detach().cpu().numpy())
-                all_labels.extend(y_batch.cpu().numpy())
-
-            self.eval()
-            val_loss = 0
-            val_steps = 0
-            val_preds = []
-            val_labels = []
-            
-            with torch.no_grad():
-                for X_batch, y_batch in val_dataloader:
-                    X_batch = X_batch.to(device)
-                    y_batch = y_batch.to(device)
-                    
-                    X_batch = X_batch.squeeze(1)
-
-                    logits = self.forward(X_batch)
-                    
-                    loss = criterion(logits, y_batch)
-                    val_loss += loss.item()
-                    val_steps += 1
-
-                    preds = torch.argmax(logits, dim=1)
-                    
-                    val_preds.extend(preds.cpu().numpy())
-                    val_labels.extend(y_batch.cpu().numpy())
-
-
-            val_acc = accuracy_score(val_labels, val_preds)
-            acc = accuracy_score(all_labels, all_preds)
-            
-            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {epoch_loss/nsteps:.4f} - Validation Loss: {val_loss/val_steps:.4f} - Train Acc: {acc:.4f} - Val Acc: {val_acc:.4f}")
-
-
-    @torch.no_grad()
-    def predict(self, X_test, batch_size=32, device=None):
-        if not device:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        self.to(device)
-        self.eval()
-
-        X_tensor = [torch.tensor(x, dtype=torch.float32) for x in X_test]
-        dataloader = torch.utils.data.DataLoader(X_tensor, batch_size=batch_size)
-
-        all_preds = []
-
-        for X_batch in dataloader:
-            X_batch = X_batch.to(device)
-            X_batch = X_batch.squeeze(1)
-
-            logits = self.forward(X_batch)
-            preds = torch.argmax(logits, dim=1)
-
-            all_preds.extend(preds.cpu().numpy())
-
-        return np.array(all_preds)

@@ -16,7 +16,11 @@ experiments/pretraining/checkpoints
 
 experiments/pretraining/data
 
-experiments/pretraining/savemodel
+experiments/models
+
+# Data files
+*.csv
+
 #Entornos virtuales
 .env
 .venv

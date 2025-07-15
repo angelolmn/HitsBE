@@ -25,6 +25,10 @@ setuptools = "^80.7.1"
 logging = "^0.4.9.6"
 pymannkendall = "^1.4.3"
 statsmodels = "^0.14.4"
+tslearn = "^0.6.3"
+h5py = "^3.14.0"
+umap-learn = "^0.5.7"
+seaborn = "^0.13.2"
 
 
 

@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.interpolate import make_interp_spline
 
 import os
 
