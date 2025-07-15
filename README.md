@@ -35,9 +35,6 @@ cd HitsBE
 ```
 
 2. Run the container:
-
-### GPU Option
-
 ```sh
 docker build -t hitsbe .
 docker run -v /path_to/HitsBE:/hitsbe --gpus device=0 -ti hitsbe:latest
