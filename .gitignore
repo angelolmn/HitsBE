@@ -8,7 +8,20 @@ build/
 dist/
 *.egg-info/
 
-# Entornos virtuales
+# Carpeta de pruebas
+tools/
+
+# Checkpoints
+experiments/pretraining/checkpoints
+
+experiments/pretraining/data
+
+experiments/models
+
+# Data files
+*.csv
+
+#Entornos virtuales
 .env
 .venv
 env/
@@ -20,3 +33,4 @@ venv/
 # Configuraciones de editores y entornos de desarrollo
 .idea/
 .vscode/
+.pytest_cache

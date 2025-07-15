@@ -1,16 +1,13 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
 
-WORKDIR /app
+RUN apt update && apt install -y python3 python3-pip
 
-COPY pyproject.toml poetry.lock* README.md /app/
+RUN pip install poetry
 
-COPY hitsbe/ /app/hitsbe/
+# docker build -t hitsbe .
 
-RUN pip install poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --only main --no-root
+# docker run -v /path_to/HitsBE:/hitsbe --gpus device=0 -ti hitsbe:latest
+# -v montar volumen entre host y contenedor
+# -ti terminal interactiva
 
-# No se si es necesario
-COPY . /app
-
-CMD ["python", "hitsbe/main.py"]
+# docker exec -ti 76fd71d96215 bash

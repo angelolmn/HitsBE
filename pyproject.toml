@@ -2,7 +2,7 @@
 name = "hitsbe"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Angel <e.angelolm@go.ugr.es>"]
 readme = "README.md"
 packages = [
     { include = "hitsbe" }
@@ -15,8 +15,25 @@ transformers = "^4.48.3"
 matplotlib = "^3.10.0"
 torch = "^2.6.0"
 aeon = "^1.0.0"
+pywavelets = "^1.8.0"
+scipy = ">=1.9.0,<1.15.0"
+torchviz = "^0.0.3"
+graphviz = "^0.20.3"
+datasetsforecast = "^1.0.0"
+deepspeed = "^0.16.7"
+setuptools = "^80.7.1"
+logging = "^0.4.9.6"
+pymannkendall = "^1.4.3"
+statsmodels = "^0.14.4"
+tslearn = "^0.6.3"
+h5py = "^3.14.0"
+umap-learn = "^0.5.7"
+seaborn = "^0.13.2"
 
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
 
 [build-system]
 requires = ["poetry-core"]
